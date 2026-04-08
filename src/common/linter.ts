@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { exec } from "child_process";
+import { execFile, ExecFileException } from "child_process";
 import { TFLintResult } from "../models/tflint";
 import { logger } from "./logger";
 import { ExtensionConfiguration } from "../settings";
@@ -26,10 +26,11 @@ class Linter {
     this.createFileWatcher();
 
     return new Promise((resolve, reject) => {
-      const cmd = `${config.binPath} --chdir ${dir} --init`;
-      logger.info(`Running cmd: ${cmd}`);
+      const args = ["--chdir", dir, "--init"];
+      const binPath = this.config!.binPath || "tflint";
+      logger.info(`Running cmd: ${binPath} ${args.join(" ")}`);
 
-      exec(cmd, (err) => {
+      execFile(binPath, args, (err: ExecFileException | null) => {
         if (err) {
           logger.error(`tflint init error:`, err);
           reject(err);
@@ -74,16 +75,16 @@ class Linter {
 
   async run(pathToLint: string, fix: boolean): Promise<TFLintResult> {
     const options = this.buildTFLintOptions(fix);
-    const cmd = this.buildCommand(pathToLint, options);
+    const args = this.buildCommand(pathToLint, options);
 
-    return this.executeTFLint(cmd);
+    return this.executeTFLint(args);
   }
 
   private buildTFLintOptions(fix: boolean): string[] {
     const options: string[] = [];
 
     if (this.config?.configFilePath) {
-      options.push(`--config ${this.config.configFilePath}`);
+      options.push("--config", this.config.configFilePath);
     }
 
     if (fix) {
@@ -93,21 +94,23 @@ class Linter {
     return options;
   }
 
-  private buildCommand(pathToLint: string, options: string[]): string {
+  private buildCommand(pathToLint: string, options: string[]): string[] {
     return [
-      this.config!.binPath,
-      `--chdir ${pathToLint}`,
+      `--chdir`,
+      pathToLint,
       "--recursive",
-      "--format json",
+      "--format",
+      "json",
       "--force",
       ...options,
-    ].join(" ");
+    ];
   }
 
-  private executeTFLint(cmd: string): Promise<TFLintResult> {
+  private executeTFLint(args: string[]): Promise<TFLintResult> {
     return new Promise((resolve, reject) => {
-      logger.info(`Executing: ${cmd}`);
-      exec(cmd, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+      const binPath = this.config!.binPath || "tflint";
+      logger.info(`Executing: ${binPath} ${args.join(" ")}`);
+      execFile(binPath, args, { maxBuffer: 10 * 1024 * 1024 }, (err: ExecFileException | null, stdout: string) => {
         if (err) {
           reject(err);
           return;
