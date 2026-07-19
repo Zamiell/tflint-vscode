@@ -5,6 +5,30 @@ import { logger } from "./logger";
 import { ExtensionConfiguration } from "../settings";
 import { dirname } from "path";
 
+export function parseTFLintResult(
+  stdout: string,
+  executionError: Error | null,
+): TFLintResult {
+  try {
+    return JSON.parse(stdout);
+  } catch (parseError) {
+    throw executionError || parseError;
+  }
+}
+
+export function buildTFLintCommand(
+  options: string[],
+  recursive: boolean,
+): string[] {
+  return [
+    ...(recursive ? ["--recursive"] : []),
+    "--format",
+    "json",
+    "--force",
+    ...options,
+  ];
+}
+
 class Linter {
   private config: ExtensionConfiguration | null = null;
   private fileWatcher: vscode.FileSystemWatcher | null = null;
@@ -52,7 +76,9 @@ class Linter {
     }
 
     logger.debug(`Creating file watcher for ${this.config.configFilePath}`);
-    const watcher = vscode.workspace.createFileSystemWatcher(this.config.configFilePath);
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      this.config.configFilePath,
+    );
     this.fileWatcher = watcher;
 
     watcher.onDidChange(async () => {
@@ -73,11 +99,15 @@ class Linter {
     });
   }
 
-  async run(pathToLint: string, fix: boolean): Promise<TFLintResult> {
+  async run(
+    pathToLint: string,
+    fix: boolean,
+    recursive: boolean = false,
+  ): Promise<TFLintResult> {
     const options = this.buildTFLintOptions(fix);
-    const args = this.buildCommand(pathToLint, options);
+    const args = buildTFLintCommand(options, recursive);
 
-    return this.executeTFLint(args);
+    return this.executeTFLint(args, pathToLint);
   }
 
   private buildTFLintOptions(fix: boolean): string[] {
@@ -94,36 +124,34 @@ class Linter {
     return options;
   }
 
-  private buildCommand(pathToLint: string, options: string[]): string[] {
-    return [
-      `--chdir`,
-      pathToLint,
-      "--recursive",
-      "--format",
-      "json",
-      "--force",
-      ...options,
-    ];
-  }
-
-  private executeTFLint(args: string[]): Promise<TFLintResult> {
+  private executeTFLint(
+    args: string[],
+    workingDirectory: string,
+  ): Promise<TFLintResult> {
     return new Promise((resolve, reject) => {
       const binPath = this.config!.binPath || "tflint";
-      logger.info(`Executing: ${binPath} ${args.join(" ")}`);
-      execFile(binPath, args, { maxBuffer: 10 * 1024 * 1024 }, (err: ExecFileException | null, stdout: string) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-
-        try {
-          const result: TFLintResult = JSON.parse(stdout);
-          resolve(result);
-        } catch (e) {
-          logger.error("JSON parse error:", e);
-          reject(e);
-        }
-      });
+      logger.info(
+        `Executing in ${workingDirectory}: ${binPath} ${args.join(" ")}`,
+      );
+      execFile(
+        binPath,
+        args,
+        {
+          cwd: workingDirectory,
+          maxBuffer: 10 * 1024 * 1024,
+        },
+        (err: ExecFileException | null, stdout: string, stderr: string) => {
+          try {
+            const result = parseTFLintResult(stdout, err);
+            resolve(result);
+          } catch (error) {
+            logger.error(
+              `TFLint failed in ${workingDirectory}: ${stderr || stdout || error}`,
+            );
+            reject(error);
+          }
+        },
+      );
     });
   }
 }

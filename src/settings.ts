@@ -28,8 +28,8 @@ export async function loadConfig(): Promise<ExtensionConfiguration> {
   }
 
   const configuration: ExtensionConfiguration = {
-    configFilePath: configFilePath,
     binPath: binPath,
+    configFilePath: configFilePath,
     fixOnSave: fixOnSave,
   };
 

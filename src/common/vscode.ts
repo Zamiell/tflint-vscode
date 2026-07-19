@@ -18,7 +18,7 @@ export function getAllWorkspacePaths() {
   const result: string[] = [];
   if (workspaces) {
     for (var key in workspaces) {
-      result.push(workspaces[key].uri.path);
+      result.push(workspaces[key].uri.fsPath);
     }
   }
   return result;

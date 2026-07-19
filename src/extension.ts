@@ -10,9 +10,6 @@ export async function activate(context: vscode.ExtensionContext) {
   let config = await loadConfig();
   await linter.init(config);
 
-  const workspaces = getAllWorkspacePaths();
-  await lintOnPaths(workspaces);
-
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration(async (event) => {
       if (event.affectsConfiguration("tflint-vscode")) {
@@ -37,7 +34,7 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("extension.lint", async () => {
       const workspaces = getAllWorkspacePaths();
-      await lintOnPaths(workspaces);
+      await lintOnPaths(workspaces, false, true);
       vscode.window.showInformationMessage("Project linted");
     }),
   );
@@ -45,7 +42,7 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("extension.lint-fix", async () => {
       const workspaces = getAllWorkspacePaths();
-      await lintOnPaths(workspaces, true);
+      await lintOnPaths(workspaces, true, true);
 
       vscode.window.showInformationMessage("Project linted & auto fixed");
     }),
@@ -58,12 +55,20 @@ export async function activate(context: vscode.ExtensionContext) {
     }),
   );
 
+  const activeDocument = vscode.window.activeTextEditor?.document;
+  if (activeDocument?.fileName.endsWith(".tf")) {
+    await lintOnFile(activeDocument);
+  }
 }
 
-async function lintOnPaths(pathsToLint: string[], withFix: boolean = false) {
+async function lintOnPaths(
+  pathsToLint: string[],
+  withFix: boolean = false,
+  recursive: boolean = false,
+) {
   for (var pathToLint of pathsToLint) {
-    const result = await linter.run(pathToLint, withFix);
-    diagnostics.publish(result);
+    const result = await linter.run(pathToLint, withFix, recursive);
+    diagnostics.publish(result, pathToLint);
   }
 }
 
@@ -71,9 +76,9 @@ async function lintOnFile(
   document: vscode.TextDocument,
   withFix: boolean = false,
 ) {
-  const pathToLint = path.dirname(document.uri.path);
+  const pathToLint = path.dirname(document.uri.fsPath);
   await lintOnPaths([pathToLint], withFix);
 }
 
 // This method is called when your extension is deactivated
-export function deactivate() { }
+export function deactivate() {}

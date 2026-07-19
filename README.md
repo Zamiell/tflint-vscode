@@ -15,7 +15,8 @@
 
 # Usage
 
-Once installed in Visual Studio Code, TFLint will automatically execute on project startup (when the project contains terraform files). And when you save a terraform file.
+Once installed in Visual Studio Code, TFLint will automatically lint the active
+Terraform file's directory on startup and whenever a Terraform file is saved.
 
 # Settings
 
