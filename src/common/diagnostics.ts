@@ -16,13 +16,24 @@ class DiagnosticsHandler {
   public collection = vscode.languages.createDiagnosticCollection("TFLint");
 
   publish(result: TFLintResult, lintPath: string) {
-    logger.info(`Found ${result.issues.length} issues`);
+    const unresolvedIssues = result.issues.filter((issue) => !issue.fixed);
+    logger.info(`Found ${unresolvedIssues.length} unresolved issues`);
     result.errors.forEach((error) => {
       logger.error(`TFLint error: ${error.message}`);
     });
 
     var diagnosticsByFile: Record<string, vscode.Diagnostic[]> = {};
     result.issues.forEach((issue: TFLintIssue) => {
+      const filename = resolveDiagnosticFilePath(
+        lintPath,
+        issue.range.filename,
+      );
+      diagnosticsByFile[filename] ??= [];
+
+      if (issue.fixed) {
+        return;
+      }
+
       // Convert from 1-based to 0-based indexing
       const startLine = Math.max(0, issue.range.start.line - 1);
       const startChar = Math.max(0, issue.range.start.column - 1);
@@ -47,14 +58,6 @@ class DiagnosticsHandler {
         target: vscode.Uri.parse(issue.rule.link),
       };
       diag.source = "tflint-vscode";
-      const filename = resolveDiagnosticFilePath(
-        lintPath,
-        issue.range.filename,
-      );
-
-      if (!diagnosticsByFile[filename]) {
-        diagnosticsByFile[filename] = [];
-      }
       diagnosticsByFile[filename].push(diag);
     });
 

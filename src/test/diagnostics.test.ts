@@ -43,7 +43,7 @@ suite("Diagnostics", () => {
           },
           rule: {
             link: "",
-            name: "logixhealth_list_format",
+            name: "foo_list_format",
             severity: "error",
           },
         },
@@ -53,6 +53,47 @@ suite("Diagnostics", () => {
     diagnostics.publish(result, lintPath);
 
     assert.equal(diagnostics.collection.get(fileUri)?.length, 1);
+    diagnostics.collection.delete(fileUri);
+  });
+
+  test("clears diagnostics for issues fixed by TFLint", () => {
+    const lintPath = path.join(
+      path.parse(process.cwd()).root,
+      "workspace",
+      "modules",
+      "aks",
+    );
+    const fileUri = vscode.Uri.file(path.join(lintPath, "aks.tf"));
+    const existingDiagnostic = new vscode.Diagnostic(
+      new vscode.Range(0, 0, 0, 1),
+      "Existing issue",
+    );
+    diagnostics.collection.set(fileUri, [existingDiagnostic]);
+    const result: TFLintResult = {
+      errors: [],
+      issues: [
+        {
+          callers: [],
+          fixable: true,
+          fixed: true,
+          message: "lists with a single value must use inline format",
+          range: {
+            end: { column: 4, line: 20 },
+            filename: "aks.tf",
+            start: { column: 30, line: 18 },
+          },
+          rule: {
+            link: "",
+            name: "foo_list_format",
+            severity: "error",
+          },
+        },
+      ],
+    };
+
+    diagnostics.publish(result, lintPath);
+
+    assert.deepEqual(diagnostics.collection.get(fileUri), []);
     diagnostics.collection.delete(fileUri);
   });
 
